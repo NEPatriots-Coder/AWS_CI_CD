@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lamar Wells - Data Scientist Portfolio</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/umd/lucide.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 5%;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            font-weight: bold;
+            font-size: 1.5rem;
+            text-decoration: none;
+            color: black;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: black;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 6rem 1rem;
+            background-color: white;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: #666;
+            max-width: 800px;
+            margin: 0 auto 2rem;
+        }
+
+        .btn-container {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background-color: black;
+            color: white;
+        }
+
+        .btn-secondary {
+            border: 1px solid black;
+            color: black;
+        }
+
+        .section {
+            padding: 4rem 5%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .about-content {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .skills-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .skill-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .skill-card img {
+            width: 50px;
+            height: 50px;
+            margin-bottom: 1rem;
+        }
+
+        .portfolio-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .portfolio-item {
+            border: 1px solid #ddd;
+            padding: 2rem;
+            border-radius: 10px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            min-height: 250px;
+        }
+
+        .portfolio-item a {
+            margin-top: auto;
+            display: inline-block;
+        }
+
+        .portfolio-item h3 {
+            margin-bottom: 1rem;
+        }
+
+        .contact-form {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        textarea.form-control {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        .submit-btn {
+            background: black;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .nav {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <a href="#" class="logo">LW</a>
+        <div class="nav-links">
+            <a href="#home"><i data-lucide="home"></i>Home</a>
+            <a href="#about"><i data-lucide="user"></i>About</a>
+            <a href="#skills"><i data-lucide="code"></i>Skills</a>
+            <a href="#portfolio"><i data-lucide="briefcase"></i>Portfolio</a>
+            <a href="#contact"><i data-lucide="mail"></i>Contact</a>
+        </div>
+    </nav>
+
+    <section class="hero" id="home">
+        <h1>LAMAR WELLS</h1>
+        <p>Inventory Analyst & Aspiring Data Scientist</p>
+        <div class="btn-container">
+            <a href="#about" class="btn btn-primary">Learn More</a>
+            <a href="#contact" class="btn btn-secondary">Get in Touch</a>
+        </div>
+    </section>
+
+    <section class="section" id="about">
+        <h2 class="section-title">About Me</h2>
+        <div class="about-content">
+            <p>Currently serving as an Inventory Analyst for a global manufacturing company, I bring a data-driven approach to optimizing inventory management and supply chain operations.</p>
+            <p>I am pursuing a Bachelor of Science in Computer Science and plan to further my education with a Masters in Data Science, specializing in Statistics. This academic journey reflects my passion for leveraging data to drive business decisions and solve complex problems.</p>
+        </div>
+    </section>
+
+    <section class="section" id="skills">
+        <h2 class="section-title">Skills & Expertise</h2>
+        <div class="skills-grid">
+            <div class="skill-card">
+                <i data-lucide="database"></i>
+                <h3>Data Analysis</h3>
+                <p>Inventory optimization, data visualization, and statistical analysis</p>
+            </div>
+            <div class="skill-card">
+                <i data-lucide="code-2"></i>
+                <h3>Programming</h3>
+                <p>Computer Science fundamentals and software development</p>
+            </div>
+            <div class="skill-card">
+                <i data-lucide="trending-up"></i>
+                <h3>Business Analytics</h3>
+                <p>Supply chain optimization and business intelligence</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section" id="portfolio">
+        <h2 class="section-title">Portfolio</h2>
+        <div class="portfolio-grid">
+            <div class="portfolio-item">
+                <h3>Random Forest Analysis Project</h3>
+                <p>An in-depth exploration of regression techniques for predictive modeling, demonstrating the application of statistical methods in real-world data analysis.</p>
+                <a href="/assets/pdfs/randomforest.pdf" class="btn btn-primary">VIEW PROJECT →</a>
+            </div>
+            <div class="portfolio-item">
+                <h3>Random Forest Gradient Boosting Implementation</h3>
+                <p>Implementation and analysis of Random Forest algorithms and Gradient Boosting showcasing advanced machine learning techniques for complex data classification and prediction tasks.</p>
+                <a href="/assets/pdfs/MachineLearning.pdf" class="btn btn-primary">VIEW PROJECT →</a>
+            </div>
+            <div class="portfolio-item">
+                <h3>Pandas Library Data Analysis Project</h3>
+                <p>Python Data Analysis Overview of Inflation Data.</p>
+                <a href="/assets/pdfs/inflation.pdf" class="btn btn-primary">VIEW PROJECT →</a>
+        </div>
+    </section>
+
+    <section class="section" id="infrastructure">
+        <h2 class="section-title">Infrastructure & Deployment</h2>
+        <div class="about-content">
+            <p>This portfolio is built using a modern cloud-native architecture on AWS, orchestrated with Terraform for infrastructure as code (IaC). The static assets are hosted in an S3 bucket configured for website hosting, while CloudFront serves as a content delivery network (CDN) to ensure low-latency access globally.</p>
+            <p>Key components:</p>
+            <ul style="text-align: left; max-width: 600px; margin: 1rem auto; list-style-position: inside;">
+                <li><strong>S3 Bucket:</strong> Configured with website hosting enabled, using bucket policies for secure access</li>
+                <li><strong>CloudFront Distribution:</strong> Edge-optimized content delivery with HTTPS enforcement and custom domain configuration</li>
+                <li><strong>Route53:</strong> DNS management for custom domain routing</li>
+                <li><strong>Terraform:</strong> Infrastructure as code for reproducible deployments and version control</li>
+            </ul>
+            <p>The entire infrastructure is version controlled alongside the application code, enabling consistent deployments across environments and automated CI/CD pipelines.</p>
+        </div>
+    </section>
+
+    <section class="section" id="contact">
+        <h2 class="section-title">Get in Touch</h2>
+        <div class="contact-form">
+            <p style="text-align: center; margin-bottom: 2rem;">Feel free to reach out to me at <a href="mailto:lamar.wells@smail.rasmussen.edu">lamar.wells@smail.rasmussen.edu</a></p>
+            <form>
+                <div class="form-group">
+                    <input type="text" class="form-control" placeholder="Your Name">
+                </div>
+                <div class="form-group">
+                    <input type="email" class="form-control" placeholder="Your Email">
+                </div>
+                <div class="form-group">
+                    <textarea class="form-control" placeholder="Your Message"></textarea>
+                </div>
+                <button type="submit" class="submit-btn">Send Message</button>
+            </form>
+        </div>
+    </section>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
