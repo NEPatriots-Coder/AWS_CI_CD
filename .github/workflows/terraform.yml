@@ -1,80 +1,77 @@
-name: 'Terraform'
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
 
-permissions:
-  contents: read
+
   
-jobs:
-  terraform:
-    name: 'Terraform'
-    runs-on: ubuntu-latest
-    environment: production
+   name: 'Terraform'
 
-    defaults:
-      run:
-        shell: bash
+   on:
+     push:
+       branches: [ "main" ]
+     pull_request:
 
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+   permissions:
+     contents: read
+     
+   jobs:
+     terraform:
+       name: 'Terraform'
+       runs-on: ubuntu-latest
+       environment: production
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-2
+       defaults:
+         run:
+           shell: bash
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v1
-      
+       steps:
+       - name: Checkout
+         uses: actions/checkout@v4
 
-    - name: Terraform Init
-      run: |
-        terraform init \
-          -backend-config="bucket=cicd-terraform-state-lw" \
-          -backend-config="dynamodb_table=terraform-state-lock" \
-          -backend-config="encrypt=true" \
-          -backend-config="region=us-east-2"
+       - name: Configure AWS Credentials
+         uses: aws-actions/configure-aws-credentials@v1
+         with:
+           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+           aws-region: us-east-2
 
-    - name: Terraform Format
-      run: terraform fmt -check
+       - name: Setup Terraform
+         uses: hashicorp/setup-terraform@v1
+         
+       - name: Check S3 Bucket
+         run: |
+           aws s3api head-bucket --bucket ${{ secrets.S3_BUCKET_NAME }} || aws s3api create-bucket --bucket ${{ secrets.S3_BUCKET_NAME }} --region us-east-2
 
-    - name: Terraform Plan
-      run: terraform plan -input=false
-      env:
-        TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+       - name: Terraform Init
+         run: |
+           terraform init \
+             -backend-config="bucket=cicd-terraform-state-lw" \
+             -backend-config="dynamodb_table=terraform-state-lock" \
+             -backend-config="encrypt=true" \
+             -backend-config="region=us-east-2"
 
-    - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: terraform apply -auto-approve -input=false
-      env:
-        TF_VAR_bucket_name: ${{ secrets.s3_BUCKET_NAME }}
+       - name: Terraform Format
+         run: terraform fmt -check
 
-    - name: Upload Website Content
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: |
-        # Create website directory structure if it doesn't exist
-        mkdir -p website/assets/pdfs
-        
-        # Copy HTML files to website directory
-        cp index.html website/
-        cp error.html website/
-        
-        # Sync website content to S3
-        aws s3 sync website/ s3://${{ secrets.s3_BUCKET_NAME }} --delete
+       - name: Terraform Plan
+         run: terraform plan -input=false
+         env:
+           TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
 
-    - name: Invalidate CloudFront Cache
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: |
-        # Get CloudFront distribution ID from Terraform output
-        DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
-        
-        # Create CloudFront invalidation
-        aws cloudfront create-invalidation \
-          --distribution-id $DISTRIBUTION_ID \
-          --paths "/*"
+       - name: Terraform Apply
+         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+         run: terraform apply -auto-approve -input=false
+         env:
+           TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+
+       - name: Upload Website Content
+         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+         run: |
+           mkdir -p website/assets/pdfs
+           cp index.html website/
+           cp error.html website/
+           aws s3 sync website/ s3://${{ secrets.S3_BUCKET_NAME }} --delete
+
+       - name: Invalidate CloudFront Cache
+         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+         run: |
+           DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
+           aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
