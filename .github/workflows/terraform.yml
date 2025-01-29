@@ -31,12 +31,6 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: "1.5.0"
-
-      # Install jq for JSON parsing
-      - name: Install jq
-        run: sudo apt-get install -y jq
 
       - name: Verify S3 Bucket Existence
         run: |
@@ -60,61 +54,6 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
-        continue-on-error: false
 
       - name: Terraform Plan
-        run: terraform plan -input=false
-        env:
-          TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
-
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -input=false
-        env:
-          TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
-
-      - name: Prepare Website Content
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          mkdir -p website/assets/pdfs
-          echo '<!DOCTYPE html><html><head><title>Welcome</title></head><body><h1>Welcome</h1></body></html>' > website/index.html
-          echo '<!DOCTYPE html><html><head><title>Error</title></head><body><h1>404</h1></body></html>' > website/error.html
-
-      - name: Upload to S3
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          echo "Syncing website content to S3..."
-          aws s3 sync website/ s3://${{ secrets.S3_BUCKET_NAME }} \
-            --delete \
-            --cache-control "max-age=3600"
-
-      - name: Debug Terraform Outputs
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          echo "Raw terraform output:"
-          terraform output
-          echo "JSON terraform output:"
-          terraform output -json
-          
-      - name: Invalidate CloudFront Cache
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          # Export terraform output to JSON
-          terraform output -json > tf_output.json
-          
-          # Parse the distribution ID using jq
-          DISTRIBUTION_ID=$(jq -r '.cloudfront_distribution_id.value' tf_output.json)
-          
-          echo "Debug - Distribution ID: $DISTRIBUTION_ID"
-          
-          # Validate the distribution ID format
-          if [[ $DISTRIBUTION_ID =~ ^E[A-Z0-9]{13}$ ]]; then
-            echo "Valid Distribution ID found: $DISTRIBUTION_ID"
-            aws cloudfront create-invalidation \
-              --distribution-id "$DISTRIBUTION_ID" \
-              --paths "/*"
-          else
-            echo "Error: Invalid CloudFront distribution ID format: $DISTRIBUTION_ID"
-            cat tf_output.json
-            exit 1
-          fi
+        run: terraform plan -i
