@@ -29,12 +29,14 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-2
 
-    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      
 
     - name: Terraform Init
       run: |
         terraform init \
-          -backend-config="bucket=cicd-terraform-state-lw" \
+          -backend-config="bucket=CI-CD-terraform-state" \
           -backend-config="dynamodb_table=terraform-state-lock" \
           -backend-config="encrypt=true" \
           -backend-config="region=us-east-2"
@@ -51,7 +53,7 @@ jobs:
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       run: terraform apply -auto-approve -input=false
       env:
-        TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+        TF_VAR_bucket_name: ${{ secrets.s3_BUCKET_NAME }}
 
     - name: Upload Website Content
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -64,7 +66,7 @@ jobs:
         cp error.html website/
         
         # Sync website content to S3
-        aws s3 sync website/ s3://${{secrets.S3_BUCKET_NAME }} --delete
+        aws s3 sync website/ s3://${{ secrets.s3_BUCKET_NAME }} --delete
 
     - name: Invalidate CloudFront Cache
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
