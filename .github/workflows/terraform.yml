@@ -67,8 +67,8 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: get-distribution-id
         run: |
-          # First try to get ID from Terraform output
-          tf_id=$(terraform output -no-color cloudfront_distribution_id 2>/dev/null | tr -d '"')
+          # First try to get ID from Terraform output 
+          tf_id=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "")
           
           # If Terraform output fails, get first distribution from list
           if [ -z "$tf_id" ]; then
