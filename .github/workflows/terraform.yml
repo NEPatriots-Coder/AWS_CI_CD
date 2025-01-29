@@ -8,7 +8,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Fail if the job takes longer than 15 minutes
+    timeout-minutes: 30  # Fail if the job takes longer than 30 minutes
 
     steps:
       # Step 1: Checkout Code
