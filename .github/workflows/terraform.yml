@@ -1,56 +1,81 @@
-name: Deploy Static Website
+name: 'Terraform'
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+  pull_request:
 
+permissions:
+  contents: read
+  
 jobs:
-  deploy:
+  terraform:
+    name: 'Terraform'
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Fail if the job takes longer than 30 minutes
+    environment: production
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
-      # Step 1: Checkout Code
-      - name: Checkout Code
-        uses: actions/checkout@v3
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      # Step 2: Setup Terraform
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.0
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-2
 
-      # Step 3: Configure AWS Credentials
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
-      # Step 4: Initialize Terraform
-      - name: Initialize Terraform
-        run: terraform init
+    - name: Terraform Init
+      run: |
+        terraform init \
+          -backend-config="bucket=CI-CD-terraform-state" \
+          -backend-config="dynamodb_table=terraform-state-lock" \
+          -backend-config="encrypt=true" \
+          -backend-config="region=us-east-2"
 
-      # Step 5: Validate Terraform Configuration
-      - name: Validate Terraform Configuration
-        run: terraform validate
+    - name: Terraform Format
+      run: terraform fmt -check
 
-      # Step 6: Plan Terraform Changes
-      - name: Plan Terraform Changes
-        run: terraform plan -out=tfplan
+    - name: Terraform Plan
+      run: terraform plan -input=false
+      env:
+        TF_VAR_bucket_name: ${{ secrets.BUCKET_NAME }}
 
-      # Step 7: Apply Terraform Changes
-      - name: Apply Terraform Changes
-        run: terraform apply -auto-approve tfplan
+    - name: Terraform Apply
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: terraform apply -auto-approve -input=false
+      env:
+        TF_VAR_bucket_name: ${{ secrets.BUCKET_NAME }}
 
-      # Step 8: Sync Static Files to S3
-      - name: Sync Static Files to S3
-        run: |
-          aws s3 sync ./website/ s3://tf-first-project --delete
+    - name: Upload Website Content
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        # Create website directory structure if it doesn't exist
+        mkdir -p website/assets/pdfs
+        
+        # Copy HTML files to website directory
+        cp index.html website/
+        cp error.html website/
+        
+        # Sync website content to S3
+        aws s3 sync website/ s3://${{ secrets.BUCKET_NAME }} --delete
 
-      # Step 9: Invalidate CloudFront Cache
-      - name: Invalidate CloudFront Cache
-        run: |
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+    - name: Invalidate CloudFront Cache
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        # Get CloudFront distribution ID from Terraform output
+        DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
+        
+        # Create CloudFront invalidation
+        aws cloudfront create-invalidation \
+          --distribution-id $DISTRIBUTION_ID \
+          --paths "/*"
