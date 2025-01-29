@@ -33,6 +33,8 @@ jobs:
         uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init and Apply
+        env:
+          TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
         run: |
           terraform init \
             -backend-config="bucket=cicd-terraform-state-lw" \
@@ -46,72 +48,97 @@ jobs:
           if [[ ${{ github.ref }} == 'refs/heads/main' && ${{ github.event_name }} == 'push' ]]; then
             terraform apply -auto-approve
           fi
-        env:
-          TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
 
       - name: Deploy Website Content
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          AWS_DEFAULT_REGION: us-east-2
+          AWS_REGION: us-east-2
         run: |
           mkdir -p website/assets/pdfs
           echo '<!DOCTYPE html><html><head><title>Welcome</title></head><body><h1>Welcome</h1></body></html>' > website/index.html
           echo '<!DOCTYPE html><html><head><title>Error</title></head><body><h1>404</h1></body></html>' > website/error.html
           
-          aws s3 sync website/ s3://${{ secrets.S3_BUCKET_NAME }} \
+          aws s3 sync website/ "s3://${{ secrets.S3_BUCKET_NAME }}" \
             --delete \
             --cache-control "max-age=3600"
 
-            - name: Get CloudFront Distribution ID
-              if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-              id: get-distribution-id
-              run: |
-                # Debug: Show terraform outputs
-                echo "All Terraform outputs:"
-                terraform output
-                
-                # First attempt to get the distribution ID
-                echo "Attempting to get distribution ID from Terraform..."
-                tf_id=$(terraform output -json cloudfront_distribution_id 2>/dev/null || echo "")
-                echo "Raw Terraform output: $tf_id"
-                
-                # Clean up the output
-                tf_id=$(echo "$tf_id" | tr -d '"' | tr -d '\n')
-                echo "Cleaned Terraform output: $tf_id"
-                
-                # If empty or invalid, fallback to AWS CLI
-                if [ -z "$tf_id" ] || [ "$tf_id" = "null" ]; then
-                  echo "Terraform output was empty or null, falling back to AWS CLI..."
-                  
-                  # Debug: List all distributions
-                  echo "Available CloudFront distributions:"
-                  aws cloudfront list-distributions --query 'DistributionList.Items[].{Id:Id,Status:Status,DomainName:DomainName}' --output table
-                  
-                  tf_id=$(aws cloudfront list-distributions \
-                    --query 'DistributionList.Items[?Status==`Deployed`].Id | [0]' \
-                    --output text)
-                  echo "AWS CLI distribution ID: $tf_id"
-                fi
-                
-                # Additional validation
-                echo "Validating distribution ID: $tf_id"
-                
-                # Check if distribution exists
-                if [ -n "$tf_id" ]; then
-                  echo "Checking if distribution exists..."
-                  aws cloudfront get-distribution --id "$tf_id" >/dev/null 2>&1
-                  if [ $? -ne 0 ]; then
-                    echo "Error: Distribution ID exists but is not accessible"
-                    exit 1
-                  fi
-                fi
-                
-                # Validate the ID format
-                if [[ $tf_id =~ ^E[A-Z0-9]{13}$ ]]; then
-                  echo "DISTRIBUTION_ID=${tf_id}" >> $GITHUB_OUTPUT
-                  echo "Found valid distribution ID: ${tf_id}" >> $GITHUB_STEP_SUMMARY
-                else
-                  echo "Error: Invalid or missing distribution ID format"
-                  echo "Expected format: E followed by 13 alphanumeric characters"
-                  echo "Received: $tf_id"
-                  exit 1
-                fi
+      - name: Get CloudFront Distribution ID
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: get-distribution-id
+        env:
+          AWS_DEFAULT_REGION: us-east-2
+          AWS_REGION: us-east-2
+        run: |
+          echo "Getting CloudFront Distribution ID..."
+          
+          # Show all Terraform outputs for debugging
+          echo "Terraform outputs:"
+          terraform output
+          
+          # Get distribution ID from Terraform
+          tf_id=$(terraform output -json cloudfront_distribution_id 2>/dev/null || echo "")
+          echo "Raw Terraform output: $tf_id"
+          
+          # Clean up the output
+          tf_id=$(echo "$tf_id" | tr -d '"' | tr -d '\n')
+          echo "Cleaned output: $tf_id"
+          
+          # Fallback to AWS CLI if Terraform output is empty or null
+          if [ -z "$tf_id" ] || [ "$tf_id" = "null" ]; then
+            echo "Terraform output empty or null, checking AWS CloudFront..."
+            
+            echo "Available CloudFront distributions:"
+            aws cloudfront list-distributions \
+              --query 'DistributionList.Items[].{Id:Id,Status:Status,DomainName:DomainName}' \
+              --output table
+            
+            tf_id=$(aws cloudfront list-distributions \
+              --query 'DistributionList.Items[?Status==`Deployed`].Id | [0]' \
+              --output text)
+            echo "Found distribution ID from AWS: $tf_id"
+          fi
+          
+          # Validate the distribution ID
+          if [ -n "$tf_id" ]; then
+            echo "Validating distribution ID: $tf_id"
+            
+            if aws cloudfront get-distribution --id "$tf_id" >/dev/null 2>&1; then
+              if [[ $tf_id =~ ^E[A-Z0-9]{13}$ ]]; then
+                echo "DISTRIBUTION_ID=${tf_id}" >> $GITHUB_OUTPUT
+                echo "Valid distribution ID found: ${tf_id}" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "Error: Invalid distribution ID format"
+                echo "Expected: E followed by 13 alphanumeric characters"
+                echo "Received: $tf_id"
+                exit 1
+              fi
+            else
+              echo "Error: Distribution ID exists but is not accessible"
+              exit 1
+            fi
+          else
+            echo "Error: No distribution ID found"
+            exit 1
+          fi
+
+      - name: Invalidate CloudFront Cache
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          AWS_DEFAULT_REGION: us-east-2
+          AWS_REGION: us-east-2
+        run: |
+          DISTRIBUTION_ID="${{ steps.get-distribution-id.outputs.DISTRIBUTION_ID }}"
+          
+          if [ -n "$DISTRIBUTION_ID" ]; then
+            echo "Creating CloudFront invalidation for distribution: $DISTRIBUTION_ID"
+            aws cloudfront create-invalidation \
+              --distribution-id "$DISTRIBUTION_ID" \
+              --paths "/*"
+            echo "Cache invalidation created successfully"
+          else
+            echo "Error: No distribution ID available for cache invalidation"
+            exit 1
+          fi
+
       
