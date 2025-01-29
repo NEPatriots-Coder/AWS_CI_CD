@@ -183,42 +183,30 @@ resource "aws_cloudfront_distribution" "website" {
 # File Upload Configuration
 #----------------------------------------
 
-# Resource to handle website file uploads
 resource "null_resource" "upload_files" {
   triggers = {
     always_run = "${timestamp()}"
   }
 
   provisioner "local-exec" {
-    interpreter = ["PowerShell", "-Command"]
-    command     = <<-EOT
-      # Create website directory if it doesn't exist
-      if (-not (Test-Path -Path "./website")) {
-        New-Item -ItemType Directory -Path "./website"
-      }
-      
-      # Create assets/pdfs directory if it doesn't exist
-      if (-not (Test-Path -Path "./website/assets/pdfs")) {
-        New-Item -ItemType Directory -Path "./website/assets/pdfs" -Force
-      }
+    command = <<-EOT
+      # Create website directory
+      mkdir -p ./website/assets/pdfs
       
       # Copy HTML files if they exist
-      if (Test-Path -Path "./index.html") {
-        Copy-Item -Path "./index.html" -Destination "./website/"
-      }
-      if (Test-Path -Path "./error.html") {
-        Copy-Item -Path "./error.html" -Destination "./website/"
-      }
+      [ -f ./index.html ] && cp ./index.html ./website/
+      [ -f ./error.html ] && cp ./error.html ./website/
       
       # Sync to S3
-      $syncResult = aws s3 sync "./website/" "s3://${var.bucket_name}" --delete
-      if ($LASTEXITCODE -eq 0) {
-        Write-Host "Website files uploaded successfully"
+      aws s3 sync ./website/ s3://${var.bucket_name} --delete
+      
+      if [ $? -eq 0 ]; then
+        echo "Website files uploaded successfully"
         aws cloudfront create-invalidation --distribution-id ${aws_cloudfront_distribution.website.id} --paths "/*"
-      } else {
-        Write-Host "Failed to upload website files"
+      else
+        echo "Failed to upload website files"
         exit 1
-      }
+      fi
     EOT
   }
 
@@ -228,5 +216,6 @@ resource "null_resource" "upload_files" {
     aws_s3_bucket_policy.website
   ]
 }
+
 
 
