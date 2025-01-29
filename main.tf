@@ -218,20 +218,6 @@ resource "null_resource" "upload_files" {
 }
 
 
-output "cloudfront_distribution_id" {
-  description = "The CloudFront Distribution ID"
-  value       = aws_cloudfront_distribution.website.id
-}
-
-output "cloudfront_domain_name" {
-  description = "The CloudFront Distribution Domain Name"
-  value       = aws_cloudfront_distribution.website.domain_name
-}
-
-output "s3_bucket_name" {
-  description = "The name of the S3 bucket"
-  value       = data.aws_s3_bucket.website.id
-}
 
 
 
