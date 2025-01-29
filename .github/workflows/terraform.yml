@@ -1,12 +1,10 @@
 name: 'Terraform Infrastructure & Website Deployment'
 
-# Define trigger conditions for the workflow
 on:
   push:
     branches: [ "main" ]
   pull_request:
 
-# Set required permissions
 permissions:
   contents: read
   
@@ -21,7 +19,6 @@ jobs:
         shell: bash
 
     steps:
-      # Basic Setup Steps
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -35,144 +32,64 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
-      # Verify AWS Configuration
-      - name: Verify AWS Configuration
+      # Infrastructure Setup
+      - name: Terraform Init and Apply
         run: |
-          echo "Verifying AWS Configuration..."
-          aws sts get-caller-identity
-          aws configure list
-
-      # S3 Bucket Management
-      - name: Verify S3 Bucket
-        run: |
-          echo "Checking S3 bucket status..."
-          if ! aws s3api head-bucket --bucket ${{ secrets.S3_BUCKET_NAME }} 2>/dev/null; then
-            echo "Creating bucket ${{ secrets.S3_BUCKET_NAME }}"
-            aws s3api create-bucket \
-              --bucket ${{ secrets.S3_BUCKET_NAME }} \
-              --region us-east-2 \
-              --create-bucket-configuration LocationConstraint=us-east-2
-          else
-            echo "Bucket ${{ secrets.S3_BUCKET_NAME }} exists"
-          fi
-
-      # Terraform Infrastructure Management
-      - name: Terraform Init
-        run: |
-          echo "Initializing Terraform..."
           terraform init \
             -backend-config="bucket=cicd-terraform-state-lw" \
             -backend-config="dynamodb_table=terraform-state-lock" \
             -backend-config="encrypt=true" \
             -backend-config="region=us-east-2"
-
-      - name: Terraform Format
-        run: terraform fmt -check
-
-      - name: Terraform Plan
-        run: terraform plan
+          
+          terraform fmt -check
+          terraform plan
+          
+          if [[ ${{ github.ref }} == 'refs/heads/main' && ${{ github.event_name }} == 'push' ]]; then
+            terraform apply -auto-approve
+          fi
         env:
           TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
-
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
-        env:
-          TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
-
-      # Infrastructure Verification
-      - name: Verify Infrastructure State
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          echo "=== Terraform State Details ==="
-          terraform show
-          
-          echo "=== Terraform Outputs ==="
-          terraform output || echo "No outputs available"
-          
-          echo "=== CloudFront Configuration ==="
-          aws cloudfront list-distributions --query 'DistributionList.Items[].{Id:Id,Domain:DomainName,Status:Status,Enabled:Enabled}' --output table || echo "No distributions found"
-          
-          echo "=== S3 Bucket Configuration ==="
-          aws s3api get-bucket-website --bucket ${{ secrets.S3_BUCKET_NAME }} || echo "No website configuration"
 
       # Website Content Deployment
-      - name: Prepare Website Content
+      - name: Deploy Website Content
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          echo "Preparing website content..."
           mkdir -p website/assets/pdfs
           echo '<!DOCTYPE html><html><head><title>Welcome</title></head><body><h1>Welcome</h1></body></html>' > website/index.html
           echo '<!DOCTYPE html><html><head><title>Error</title></head><body><h1>404</h1></body></html>' > website/error.html
-
-      - name: Upload to S3
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          echo "Uploading content to S3..."
+          
           aws s3 sync website/ s3://${{ secrets.S3_BUCKET_NAME }} \
             --delete \
             --cache-control "max-age=3600"
 
-      # CloudFront Cache Management
-      - name: Get CloudFront ID and Invalidate Cache
+      # CloudFront Cache Invalidation
+      - name: Get CloudFront Distribution ID
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: get-distribution-id
         run: |
-          echo "=== Getting CloudFront Distribution ID ==="
+          # First try to get ID from Terraform output
+          tf_id=$(terraform output -no-color cloudfront_distribution_id 2>/dev/null | tr -d '"')
           
-          # Get and clean the distribution ID
-          DIST_OUTPUT=$(terraform output -no-color cloudfront_distribution_id)
-          DISTRIBUTION_ID=$(echo "$DIST_OUTPUT" | tr -d '"' | tr -d '\n')
+          # If Terraform output fails, get first distribution from list
+          if [ -z "$tf_id" ]; then
+            echo "Getting ID from CloudFront list..."
+            tf_id=$(aws cloudfront list-distributions --query 'DistributionList.Items[0].Id' --output text)
+          fi
           
-          echo "Distribution ID from Terraform: $DISTRIBUTION_ID"
-          
-          # Function to check distribution status
-          check_distribution() {
-            local dist_id=$1
-            aws cloudfront get-distribution --id "$dist_id" \
-              --query 'Distribution.Status' --output text 2>/dev/null || echo "NotFound"
-          }
-          
-          # Wait for distribution to be available (max 5 minutes)
-          echo "Waiting for CloudFront distribution to be available..."
-          for i in {1..30}; do
-            STATUS=$(check_distribution "$DISTRIBUTION_ID")
-            echo "Attempt $i: Distribution status - $STATUS"
-            
-            if [ "$STATUS" != "NotFound" ]; then
-              echo "Distribution found! Status: $STATUS"
-              
-              # Create invalidation
-              echo "Creating cache invalidation..."
-              aws cloudfront create-invalidation \
-                --distribution-id "$DISTRIBUTION_ID" \
-                --paths "/*"
-              exit 0
-            fi
-            
-            if [ $i -eq 30 ]; then
-              echo "Timeout waiting for distribution"
-              break
-            fi
-            
-            echo "Distribution not ready yet, waiting 10 seconds..."
-            sleep 10
-          done
-          
-          echo "Error: Distribution never became available"
-          echo "Current CloudFront distributions:"
-          aws cloudfront list-distributions --query 'DistributionList.Items[].{Id:Id,Status:Status,DomainName:DomainName}' --output table
-          exit 1
+          echo "DISTRIBUTION_ID=$tf_id" >> $GITHUB_OUTPUT
+          echo "CloudFront Distribution ID: $tf_id" >> $GITHUB_STEP_SUMMARY
 
-      # Final Deployment Verification
-      - name: Verify Deployment
+      - name: Invalidate CloudFront Cache
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          echo "=== Final Deployment Status ==="
+          DISTRIBUTION_ID="${{ steps.get-distribution-id.outputs.DISTRIBUTION_ID }}"
           
-          echo "S3 Website URL:"
-          aws s3 website s3://${{ secrets.S3_BUCKET_NAME }} --get-url || echo "Unable to get website URL"
-          
-          echo "CloudFront Distribution Status:"
-          aws cloudfront list-distributions \
-            --query 'DistributionList.Items[?Status==`Deployed`]' \
-            --output table
+          if [ -n "$DISTRIBUTION_ID" ]; then
+            echo "Creating invalidation for distribution: $DISTRIBUTION_ID"
+            aws cloudfront create-invalidation \
+              --distribution-id "$DISTRIBUTION_ID" \
+              --paths "/*"
+          else
+            echo "No distribution ID found"
+            exit 1
+          fi
