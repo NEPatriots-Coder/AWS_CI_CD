@@ -2,12 +2,12 @@ name: 'Terraform Infrastructure & Website Deployment'
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
 
 permissions:
   contents: read
-  
+
 jobs:
   deploy:
     name: 'Deploy Infrastructure and Website'
@@ -32,7 +32,6 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
-      # Infrastructure Setup
       - name: Terraform Init and Apply
         run: |
           terraform init \
@@ -50,7 +49,6 @@ jobs:
         env:
           TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
 
-      # Website Content Deployment
       - name: Deploy Website Content
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
@@ -62,44 +60,44 @@ jobs:
             --delete \
             --cache-control "max-age=3600"
 
-            - name: Get CloudFront Distribution ID
-            if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-            id: get-distribution-id
-            run: |
-              # First attempt to get the distribution ID directly from terraform output
-              tf_id=$(terraform output cloudfront_distribution_id || echo "")
-              
-              # Clean up the output and remove quotes if present
-              tf_id=$(echo "$tf_id" | tr -d '"' | tr -d '\n')
-              
-              # If empty or invalid, fallback to AWS CLI
-              if [ -z "$tf_id" ] || [ "$tf_id" = "null" ]; then
-                echo "Falling back to AWS CLI to get distribution ID..."
-                tf_id=$(aws cloudfront list-distributions \
-                  --query 'DistributionList.Items[?Status==`Deployed`].Id | [0]' \
-                  --output text)
-              fi
-              
-              # Validate the ID format
-              if [[ $tf_id =~ ^E[A-Z0-9]{13}$ ]]; then
-                echo "DISTRIBUTION_ID=${tf_id}" >> $GITHUB_OUTPUT
-                echo "Found valid distribution ID: ${tf_id}" >> $GITHUB_STEP_SUMMARY
-              else
-                echo "Error: Invalid or missing distribution ID"
-                exit 1
-              fi
-    
-          - name: Invalidate CloudFront Cache
-            if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-            run: |
-              DISTRIBUTION_ID="${{ steps.get-distribution-id.outputs.DISTRIBUTION_ID }}"
-              
-              if [ -n "$DISTRIBUTION_ID" ]; then
-                echo "Creating invalidation for distribution: $DISTRIBUTION_ID"
-                aws cloudfront create-invalidation \
-                  --distribution-id "$DISTRIBUTION_ID" \
-                  --paths "/*"
-              else
-                echo "No distribution ID found"
-                exit 1
-              fi
+      - name: Get CloudFront Distribution ID
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: get-distribution-id
+        run: |
+          # First attempt to get the distribution ID directly from terraform output
+          tf_id=$(terraform output cloudfront_distribution_id || echo "")
+          
+          # Clean up the output and remove quotes if present
+          tf_id=$(echo "$tf_id" | tr -d '"' | tr -d '\n')
+          
+          # If empty or invalid, fallback to AWS CLI
+          if [ -z "$tf_id" ] || [ "$tf_id" = "null" ]; then
+            echo "Falling back to AWS CLI to get distribution ID..."
+            tf_id=$(aws cloudfront list-distributions \
+              --query 'DistributionList.Items[?Status==`Deployed`].Id | [0]' \
+              --output text)
+          fi
+          
+          # Validate the ID format
+          if [[ $tf_id =~ ^E[A-Z0-9]{13}$ ]]; then
+            echo "DISTRIBUTION_ID=${tf_id}" >> $GITHUB_OUTPUT
+            echo "Found valid distribution ID: ${tf_id}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Error: Invalid or missing distribution ID"
+            exit 1
+          fi
+
+      - name: Invalidate CloudFront Cache
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          DISTRIBUTION_ID="${{ steps.get-distribution-id.outputs.DISTRIBUTION_ID }}"
+          
+          if [ -n "$DISTRIBUTION_ID" ]; then
+            echo "Creating invalidation for distribution: $DISTRIBUTION_ID"
+            aws cloudfront create-invalidation \
+              --distribution-id "$DISTRIBUTION_ID" \
+              --paths "/*"
+          else
+            echo "No distribution ID found"
+            exit 1
+          fi
