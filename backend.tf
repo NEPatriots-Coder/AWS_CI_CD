@@ -1,8 +1,8 @@
 # Create DynamoDB table for state locking
 resource "aws_dynamodb_table" "terraform_state_lock" {
-  name           = "terraform-state-lock"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "LockID"
+  name         = "terraform-state-lock"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
 
   attribute {
     name = "LockID"
@@ -17,7 +17,7 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
 
 # Create S3 bucket for terraform state
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "cicd-terraform-state-lw"  # Changed to use hyphens instead of underscores
+  bucket = "cicd-terraform-state-lw"
 
   # Prevent accidental deletion of this S3 bucket
   lifecycle {
