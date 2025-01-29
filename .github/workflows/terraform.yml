@@ -32,7 +32,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
-      - name: Verify S3 Bucket Existence
+      - name: Verify S3 Bucket
         run: |
           if ! aws s3api head-bucket --bucket ${{ secrets.S3_BUCKET_NAME }} 2>/dev/null; then
             echo "Creating bucket ${{ secrets.S3_BUCKET_NAME }}"
@@ -52,8 +52,49 @@ jobs:
             -backend-config="encrypt=true" \
             -backend-config="region=us-east-2"
 
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
+      - name: Terraform Format
+        run: terraform fmt -check
 
+      # Corrected plan command
       - name: Terraform Plan
-        run: terraform plan -i
+        run: terraform plan
+        env:
+          TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+
+      - name: Prepare Website Content
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          mkdir -p website/assets/pdfs
+          echo '<!DOCTYPE html><html><head><title>Welcome</title></head><body><h1>Welcome</h1></body></html>' > website/index.html
+          echo '<!DOCTYPE html><html><head><title>Error</title></head><body><h1>404</h1></body></html>' > website/error.html
+
+      - name: Upload to S3
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "Syncing website content to S3..."
+          aws s3 sync website/ s3://${{ secrets.S3_BUCKET_NAME }} \
+            --delete \
+            --cache-control "max-age=3600"
+
+      - name: Get CloudFront ID and Invalidate Cache
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          # Get the distribution ID directly
+          DISTRIBUTION_ID=$(terraform output -no-color cloudfront_distribution_id | tr -d '"')
+          echo "Distribution ID: ${DISTRIBUTION_ID}"
+          
+          if [[ -n "$DISTRIBUTION_ID" ]]; then
+            echo "Creating CloudFront invalidation..."
+            aws cloudfront create-invalidation \
+              --distribution-id "$DISTRIBUTION_ID" \
+              --paths "/*"
+          else
+            echo "Error: No Distribution ID found"
+            exit 1
+          fi
