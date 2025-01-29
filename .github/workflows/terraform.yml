@@ -112,7 +112,7 @@ jobs:
       - name: Invalidate CloudFront Cache
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
+          DISTRIBUTION_ID=$(terraform output  cloudfront_distribution_id | tr -d '"')
           if [ ! -z "$DISTRIBUTION_ID" ]; then
             echo "Invalidating CloudFront cache..."
             aws cloudfront create-invalidation \
