@@ -1,12 +1,10 @@
 name: 'Terraform Infrastructure & Website Deployment'
 
-# Define when this workflow runs
 on:
   push:
     branches: [ "main" ]
   pull_request:
 
-# Define permissions scope
 permissions:
   contents: read
   
@@ -21,11 +19,9 @@ jobs:
         shell: bash
 
     steps:
-      # Step 1: Checkout repository
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Configure AWS credentials
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -33,13 +29,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      # Step 3: Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: "1.5.0"  # Specify version for consistency
+          terraform_version: "1.5.0"
 
-      # Step 4: Verify and create S3 bucket if needed
       - name: Verify S3 Bucket Existence
         run: |
           if ! aws s3api head-bucket --bucket ${{ secrets.S3_BUCKET_NAME }} 2>/dev/null; then
@@ -52,7 +46,6 @@ jobs:
             echo "Bucket ${{ secrets.S3_BUCKET_NAME }} already exists"
           fi
 
-      # Step 5: Initialize Terraform with backend configuration
       - name: Terraform Init
         run: |
           terraform init \
@@ -61,76 +54,61 @@ jobs:
             -backend-config="encrypt=true" \
             -backend-config="region=us-east-2"
 
-      # Step 6: Check Terraform formatting
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
         continue-on-error: false
 
-      # Step 7: Generate Terraform plan
       - name: Terraform Plan
         run: terraform plan -input=false
         env:
           TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
 
-      # Step 8: Apply Terraform changes (only on main branch push)
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -input=false
         env:
           TF_VAR_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
 
-      # Step 9: Prepare and upload website content
       - name: Prepare Website Content
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           # Create website directory structure
           mkdir -p website/assets/pdfs
           
-          # Create or verify index.html
-          if [ ! -f "website/index.html" ]; then
-            cat > website/index.html << 'EOL'
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <title>Welcome</title>
-            </head>
-            <body>
-                <h1>Welcome to the Website</h1>
-                <p>This is a default landing page.</p>
-            </body>
-            </html>
-            EOL
-          fi
+          # Create index.html
+          echo '<!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <title>Welcome</title>
+          </head>
+          <body>
+              <h1>Welcome to the Website</h1>
+              <p>This is a default landing page.</p>
+          </body>
+          </html>' > website/index.html
           
-          # Create or verify error.html
-          if [ ! -f "website/error.html" ]; then
-            cat > website/error.html << 'EOL'
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <title>Error</title>
-            </head>
-            <body>
-                <h1>404 - Page Not Found</h1>
-                <p>The requested page could not be found.</p>
-            </body>
-            </html>
-            EOL
-          fi
+          # Create error.html
+          echo '<!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <title>Error</title>
+          </head>
+          <body>
+              <h1>404 - Page Not Found</h1>
+              <p>The requested page could not be found.</p>
+          </body>
+          </html>' > website/error.html
 
-      # Step 10: Sync website content to S3
       - name: Upload to S3
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           echo "Syncing website content to S3..."
           aws s3 sync website/ s3://${{ secrets.S3_BUCKET_NAME }} \
             --delete \
-            --cache-control "max-age=3600" \
-            --acl public-read
+            --cache-control "max-age=3600"
 
-      # Step 11: Invalidate CloudFront cache
       - name: Invalidate CloudFront Cache
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
@@ -144,7 +122,3 @@ jobs:
             echo "Error: Could not retrieve CloudFront distribution ID"
             exit 1
           fi
-
-
-  
-   
