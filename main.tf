@@ -16,15 +16,14 @@ provider "aws" {
 # S3 Bucket Configuration
 #----------------------------------------
 
-# Create the main S3 bucket
-resource "aws_s3_bucket" "website" {
-  bucket        = var.bucket_name
-  force_destroy = true
+# Reference the existing S3 bucket instead of creating it
+data "aws_s3_bucket" "website" {
+  bucket = var.bucket_name
 }
 
 # Enable versioning for backup and recovery
 resource "aws_s3_bucket_versioning" "website" {
-  bucket = aws_s3_bucket.website.id
+  bucket = data.aws_s3_bucket.website.id
   versioning_configuration {
     status = "Enabled"
   }
@@ -32,7 +31,7 @@ resource "aws_s3_bucket_versioning" "website" {
 
 # Configure the bucket for static website hosting
 resource "aws_s3_bucket_website_configuration" "website" {
-  bucket = aws_s3_bucket.website.id
+  bucket = data.aws_s3_bucket.website.id
 
   index_document {
     suffix = "index.html"
@@ -45,7 +44,7 @@ resource "aws_s3_bucket_website_configuration" "website" {
 
 # Enable server-side encryption for security
 resource "aws_s3_bucket_server_side_encryption_configuration" "website" {
-  bucket = aws_s3_bucket.website.id
+  bucket = data.aws_s3_bucket.website.id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -65,7 +64,7 @@ resource "aws_cloudfront_origin_access_identity" "website" {
 
 # Configure bucket policy to allow CloudFront access
 resource "aws_s3_bucket_policy" "website" {
-  bucket = aws_s3_bucket.website.id
+  bucket = data.aws_s3_bucket.website.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -77,7 +76,7 @@ resource "aws_s3_bucket_policy" "website" {
           AWS = aws_cloudfront_origin_access_identity.website.iam_arn
         }
         Action   = "s3:GetObject"
-        Resource = "${aws_s3_bucket.website.arn}/*"
+        Resource = "${data.aws_s3_bucket.website.arn}/*"
       }
     ]
   })
@@ -85,7 +84,7 @@ resource "aws_s3_bucket_policy" "website" {
 
 # Set bucket ownership controls
 resource "aws_s3_bucket_ownership_controls" "website" {
-  bucket = aws_s3_bucket.website.id
+  bucket = data.aws_s3_bucket.website.id
 
   rule {
     object_ownership = "BucketOwnerPreferred"
@@ -94,7 +93,7 @@ resource "aws_s3_bucket_ownership_controls" "website" {
 
 # Block all public access - content will be served through CloudFront
 resource "aws_s3_bucket_public_access_block" "website" {
-  bucket = aws_s3_bucket.website.id
+  bucket = data.aws_s3_bucket.website.id
 
   block_public_acls       = false
   block_public_policy     = false
@@ -111,7 +110,7 @@ resource "aws_cloudfront_distribution" "website" {
 
   # Origin configuration for S3
   origin {
-    domain_name = aws_s3_bucket.website.bucket_regional_domain_name
+    domain_name = data.aws_s3_bucket.website.bucket_regional_domain_name
     origin_id   = "S3Origin"
 
     s3_origin_config {
@@ -185,7 +184,6 @@ resource "aws_cloudfront_distribution" "website" {
 #----------------------------------------
 
 # Resource to handle website file uploads
-# Resource to handle website file uploads
 resource "null_resource" "upload_files" {
   triggers = {
     always_run = "${timestamp()}"
@@ -225,11 +223,10 @@ resource "null_resource" "upload_files" {
   }
 
   depends_on = [
-    aws_s3_bucket.website,
+    data.aws_s3_bucket.website,
     aws_cloudfront_distribution.website,
     aws_s3_bucket_policy.website
   ]
 }
-
 
 
